@@ -115,7 +115,7 @@ func (r *Registry) watchNodes() {
 	r.updateNodes()
 	ctx, _ := context.WithTimeout(context.Background(), watchTimeout)
 	ch := r.client.Watch(ctx, r.prefix, clientv3.WithPrefix())
-	for msg, ok := range ch {
+	for msg := range ch {
 		log.Printf("registry watch new events. msg:%+v", msg)
 		if !ok {
 			log.Printf("registry watch keep alive closed.")
