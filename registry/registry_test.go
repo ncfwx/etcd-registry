@@ -1,4 +1,4 @@
-package etcdregistry
+package registry
 
 import (
 	"context"
