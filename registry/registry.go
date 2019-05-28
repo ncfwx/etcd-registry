@@ -81,6 +81,7 @@ func (r *Registry) registerNode(node *Node, ttl time.Duration) {
 	}
 
 	for range ch {
+		// LeaseKeepAliveResponse
 	}
 
 	log.Printf("registry keep alive closed.")
