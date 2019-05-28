@@ -13,7 +13,7 @@ import (
 
 func Example() {
 	conf := clientv3.Config {
-		Endpoints:   []string{"localhost:2379"},
+		Endpoints:   []string{"your-etcd-host:2379"},
 		DialTimeout: 3*time.Second,
 		Username:    "root",
 		Password:    "devdev",
