@@ -3,18 +3,18 @@ package registry_test
 import (
 	"fmt"
 	"log"
-	"time"
 	"math/rand"
+	"time"
 
-	"github.com/ncfwx/x/ip"
 	"github.com/coreos/etcd/clientv3"
 	"github.com/ncfwx/etcd-registry/registry"
+	"github.com/ncfwx/x/ip"
 )
 
 func Example() {
-	conf := clientv3.Config {
+	conf := clientv3.Config{
 		Endpoints:   []string{"your-etcd-host:2379"},
-		DialTimeout: 3*time.Second,
+		DialTimeout: 3 * time.Second,
 		Username:    "root",
 		Password:    "devdev",
 	}
@@ -26,10 +26,10 @@ func Example() {
 	}
 
 	// register
-	ip, _ := ip. GetLocalIp()
+	ip, _ := ip.GetLocalIp()
 	rand.Seed(time.Now().UnixNano())
-	port := fmt.Sprintf("%v", rand.Intn(10000) + 10000)
-	r.KeepRegisterNode(&registry.Node{IP:ip, Port:port}, 3*time.Second)
+	port := fmt.Sprintf("%v", rand.Intn(10000)+10000)
+	r.KeepRegisterNode(&registry.Node{IP: ip, Port: port}, 3*time.Second)
 
 	// discovery
 	r.KeepWatchNodes()

@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	retryWait    = 3 * time.Second
-	watchTimeout = 5 * time.Minute
+	retryWait     = 3 * time.Second
+	watchTimeout  = 5 * time.Minute
 	requestTimout = 3 * time.Second
 )
 
 // Registry 注册器
 type Registry struct {
-	client  *clientv3.Client
-	prefix  string
-	nodes   []Node
+	client *clientv3.Client
+	prefix string
+	nodes  []Node
 }
 
 // Node 服务结点
