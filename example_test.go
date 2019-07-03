@@ -1,6 +1,7 @@
 package registry_test
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -11,12 +12,21 @@ import (
 	"github.com/ncfwx/x/ip"
 )
 
+var (
+	watchedNodesOutputCount int
+)
+
+func init() {
+	flag.IntVar(&watchedNodesOutputCount, "wc", 3, "watched nodes output count")
+	flag.Parse()
+}
+
 func Example() {
 	conf := clientv3.Config{
 		Endpoints:   []string{"your-etcd-host:2379"},
 		DialTimeout: 3 * time.Second,
 		Username:    "root",
-		Password:    "devdev",
+		Password:    "root",
 	}
 
 	r, err := registry.NewRegistry(conf)
@@ -37,9 +47,9 @@ func Example() {
 	nodes := registry.ServiceNodes{}
 	r.KeepWatchNodes("/example/test/", &nodes)
 
-	for i := 0; i < 100; i++ {
-		log.Printf("[example] nodes = %v", len(nodes))
-		for k, v := range nodes {
+	for i := 0; i < watchedNodesOutputCount; i++ {
+		log.Printf("[example] nodes count = %v", len(nodes.Nodes))
+		for k, v := range nodes.Nodes {
 			log.Printf("[example] k = %v, v = %v", k, v)
 		}
 		time.Sleep(3 * time.Second)

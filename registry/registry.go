@@ -20,25 +20,24 @@ type Registry struct {
 	client *clientv3.Client
 }
 
-// Node 存入etcd的结点
+// Node 表示一个存入etcd的结点数据
 type Node interface {
-	GetKey() string
-	GetValue() (string, error)
+	Key() string
+	Value() (string, error)
 }
 
-// Nodes 一个prefix下的结点集合
+// Nodes 表示一个prefix下的所有数据的集合
 type Nodes interface {
-	Put(key []byte, data []byte) error
+	Put(key []byte, value []byte) error
+	PutAll(keys [][]byte, values [][]byte) error
 	Delete(key []byte)
-	Clear()
 }
 
 // NewRegistry 初始化一个注册实例
 func NewRegistry(conf clientv3.Config) (*Registry, error) {
 	client, err := clientv3.New(conf)
-	log.Printf("registry new client. conf:%+v, err:%v", conf, err)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new clientv3 failed:%v", err)
 	}
 
 	return &Registry{client: client}, nil
@@ -46,56 +45,59 @@ func NewRegistry(conf clientv3.Config) (*Registry, error) {
 
 // KeepRegisterNode 注册一个结点
 func (r *Registry) KeepRegisterNode(node Node, prefix string, ttl time.Duration) error {
-	log.Printf("registry register node start. node:%+v, prefix:%v, ttl:%v", node, prefix, ttl)
-
 	leaseID, err := r.registerNode(node, prefix, ttl)
+	log.Printf("registry register node. err:%v, node:%+v, prefix:%v, ttl:%v", err, node, prefix, ttl)
 
 	go func(node Node, prefix string, ttl time.Duration, leaseID clientv3.LeaseID) {
 		defer func() {
 			err := recover()
 			log.Printf("registry register node recover. err:%v", err)
 			time.Sleep(retryWait)
+
 			r.KeepRegisterNode(node, prefix, ttl)
 		}()
 
-		r.keepAlive(leaseID)
-		log.Printf("registry keep alive over")
+		err := r.keepAlive(leaseID)
+		log.Printf("registry keep alive finished. err:%v", err)
 	}(node, prefix, ttl, leaseID)
 
-	return err
+	return nil
 }
 
 func (r *Registry) registerNode(node Node, prefix string, ttl time.Duration) (clientv3.LeaseID, error) {
 	ctx, _ := context.WithTimeout(context.Background(), requestTimout)
-
 	leaseResponse, err := r.client.Grant(ctx, int64(ttl.Seconds()))
-	log.Printf("registry grant new lease. lease:%+v, err:%v", leaseResponse, err)
+
+	log.Printf("registry grant new lease. err:%v, lease:%+v", err, leaseResponse)
 	if err != nil {
-		return 0, fmt.Errorf("grant lease failed:%s", err)
+		return 0, fmt.Errorf("grant lease failed:%v", err)
 	}
 
-	key := prefix + node.GetKey()
-	value, _ := node.GetValue()
-
+	key := prefix + node.Key()
+	value, _ := node.Value()
 	resp, err := r.client.Put(ctx, key, value, clientv3.WithLease(leaseResponse.ID))
-	log.Printf("registry put. resp:%+v, key:%s, value:%s, err:%v", resp, key, value, err)
+
+	log.Printf("registry put value.  err:%v, resp:%+v, key:%s, value:%s", err, resp, key, value)
 	if err != nil {
-		return 0, fmt.Errorf("put value failed:%s", err)
+		return 0, fmt.Errorf("put value failed:%v", err)
 	}
 
 	return leaseResponse.ID, nil
 }
 
-func (r *Registry) keepAlive(leaseID clientv3.LeaseID) {
+func (r *Registry) keepAlive(leaseID clientv3.LeaseID) error {
 	ch, err := r.client.KeepAlive(context.Background(), leaseID)
+
 	log.Printf("registry keep alive start. err:%v", err)
 	if err != nil {
-		return
+		return fmt.Errorf("keepAlive failed:%v", err)
 	}
 
 	for range ch {
-		// LeaseKeepAliveResponse
+		// nothing to do
 	}
+
+	return fmt.Errorf("keepAlive channel closed")
 }
 
 // KeepWatchNodes 监控注册的结点
@@ -105,6 +107,7 @@ func (r *Registry) KeepWatchNodes(prefix string, nodes Nodes) {
 			err := recover()
 			log.Printf("registry watch recover. err:%v", err)
 			time.Sleep(retryWait)
+
 			r.KeepWatchNodes(prefix, nodes)
 		}()
 
@@ -128,6 +131,28 @@ func (r *Registry) watchNodes(prefix string, nodes Nodes) {
 	log.Printf("registry watch keep alive closed")
 }
 
+func (r *Registry) updateNodes(prefix string, nodes Nodes) {
+	ctx, _ := context.WithTimeout(context.Background(), requestTimout)
+	resp, err := r.client.Get(ctx, prefix, clientv3.WithPrefix())
+	if err != nil {
+		log.Printf("registry update nodes get failed. err:%v", err)
+		return
+	}
+	log.Printf("registry update nodes get success. resp:%+v", resp)
+
+	keys := [][]byte{}
+	values := [][]byte{}
+	for _, v := range resp.Kvs {
+		keys = append(keys, v.Key)
+		values = append(values, v.Value)
+	}
+
+	err = nodes.PutAll(keys, values)
+	if err != nil {
+		log.Printf("registry update nodes put failed. err:%v", err)
+	}
+}
+
 func (r *Registry) handleEvent(event *clientv3.Event, nodes Nodes) {
 	switch {
 	case event.IsCreate():
@@ -138,21 +163,4 @@ func (r *Registry) handleEvent(event *clientv3.Event, nodes Nodes) {
 	case event.Type == clientv3.EventTypeDelete:
 		nodes.Delete(event.Kv.Key)
 	}
-}
-
-func (r *Registry) updateNodes(prefix string, nodes Nodes) error {
-	ctx, _ := context.WithTimeout(context.Background(), requestTimout)
-	resp, err := r.client.Get(ctx, prefix, clientv3.WithPrefix())
-
-	log.Printf("registry update nodes. resp:%+v, err:%v", resp, err)
-	if err != nil {
-		return fmt.Errorf("get value failed:%s", err)
-	}
-
-	nodes.Clear()
-	for _, v := range resp.Kvs {
-		nodes.Put(v.Key, v.Value)
-	}
-
-	return nil
 }
