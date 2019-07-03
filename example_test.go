@@ -19,25 +19,29 @@ func Example() {
 		Password:    "devdev",
 	}
 
-	r, err := registry.NewRegistry(conf, "/example/test/")
+	r, err := registry.NewRegistry(conf)
 	if err != nil {
 		log.Printf("[example] new registry failed. err:%v", err)
 		return
 	}
 
-	// register
+	prefix := "/example/test/"
 	ip, _ := ip.GetLocalIp()
 	rand.Seed(time.Now().UnixNano())
 	port := fmt.Sprintf("%v", rand.Intn(10000)+10000)
-	r.KeepRegisterNode(&registry.Node{IP: ip, Port: port}, 3*time.Second)
+
+	// register
+	r.KeepRegisterNode(&registry.ServiceNode{IP: ip, Port: port}, prefix, 3*time.Second)
 
 	// discovery
-	r.KeepWatchNodes()
-	log.Printf("[example] r = %+v", r)
+	nodes := registry.ServiceNodes{}
+	r.KeepWatchNodes("/example/test/", &nodes)
 
 	for i := 0; i < 100; i++ {
-		nodes := r.GetNodes()
-		log.Printf("[example] nodes = %+v", nodes)
+		log.Printf("[example] nodes = %v", len(nodes))
+		for k, v := range nodes {
+			log.Printf("[example] k = %v, v = %v", k, v)
+		}
 		time.Sleep(3 * time.Second)
 	}
 
